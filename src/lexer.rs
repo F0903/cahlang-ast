@@ -20,6 +20,7 @@ lazy_static! {
         "this"     => TokenType::This,
         "offering" => TokenType::Offering,
         "ritual"   => TokenType::Ritual,
+        "end"      => TokenType::End,
         "while"    => TokenType::While
     );
 }

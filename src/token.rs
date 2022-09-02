@@ -31,6 +31,7 @@ pub enum TokenType {
     // Keywords
     Offering,
     Ritual,
+    End,
     Return,
     Not,
     And,
@@ -46,15 +47,17 @@ pub enum TokenType {
     False,
     None,
 
+    // Special
+    StatementEnd,
     EOF,
 }
 
 #[derive(Debug)]
 pub struct Token {
-    token_type: TokenType,
-    lexeme: String,
-    literal: Box<dyn Any>, //TODO: Maybe use a special enum for this with acceptable values.
-    line: usize,
+    pub token_type: TokenType,
+    pub lexeme: String,
+    pub literal: Box<dyn Any>, //TODO: Maybe use a special enum for this with acceptable values.
+    pub line: usize,
 }
 
 impl Token {
