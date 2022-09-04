@@ -1,7 +1,11 @@
 use super::{token::Token, Result};
-use crate::{create_string_map, report, token::TokenType};
+use crate::{
+    create_string_map,
+    error::report,
+    token::{TokenType, Value},
+};
 use lazy_static::lazy_static;
-use std::{any::Any, collections::HashMap};
+use std::collections::HashMap;
 
 lazy_static! {
     static ref KEYWORDS: HashMap<String, TokenType> = create_string_map!(
@@ -14,6 +18,7 @@ lazy_static! {
         "if"       => TokenType::If,
         "none"     => TokenType::None,
         "or"       => TokenType::Or,
+        "is"       => TokenType::Is,
         "not"      => TokenType::Not,
         "return"   => TokenType::Return,
         "super"    => TokenType::Super,
@@ -31,6 +36,7 @@ pub struct Lexer {
     start: usize,
     current: usize,
     line: usize,
+    ignore_newline: bool,
 }
 
 impl Lexer {
@@ -41,6 +47,7 @@ impl Lexer {
             start: 0,
             current: 0,
             line: 0,
+            ignore_newline: false,
         }
     }
 
@@ -76,11 +83,11 @@ impl Lexer {
 
     fn add_token(&mut self, token_type: TokenType) {
         let text = self.source[self.start..self.current].to_owned();
-        let token = Token::new(token_type, text, Box::new(()), self.line);
+        let token = Token::new(token_type, text, Value::None, self.line);
         self.tokens.push(token);
     }
 
-    fn add_token_literal(&mut self, token_type: TokenType, literal: Box<dyn Any>) {
+    fn add_token_literal(&mut self, token_type: TokenType, literal: Value) {
         let text = self.source[self.start..self.current].to_owned();
         let token = Token::new(token_type, text, literal, self.line);
         self.tokens.push(token);
@@ -111,7 +118,7 @@ impl Lexer {
         }
 
         if self.at_end() {
-            report(self.line, b"Unterminated string.");
+            report(self.line, "Unterminated string.");
             return;
         }
 
@@ -119,7 +126,7 @@ impl Lexer {
         self.next_char();
 
         let literal = self.source[self.start + 1..self.current - 1].to_owned();
-        self.add_token_literal(TokenType::String, Box::new(literal));
+        self.add_token_literal(TokenType::String, Value::String(literal));
     }
 
     fn handle_number(&mut self) {
@@ -135,8 +142,14 @@ impl Lexer {
             }
         }
 
-        let value = self.source[self.start..self.current].parse::<f64>();
-        self.add_token_literal(TokenType::Number, Box::new(value));
+        let value = match self.source[self.start..self.current].parse::<f64>() {
+            Ok(x) => x,
+            Err(_) => {
+                report(self.line, "Could not parse number!");
+                return;
+            }
+        };
+        self.add_token_literal(TokenType::Number, Value::Number(value));
     }
 
     fn handle_identifier(&mut self) {
@@ -163,11 +176,28 @@ impl Lexer {
                 }
             }
             ' ' | '\r' | '\t' => (),
-            '\n' => self.line += 1,
-            '(' => self.add_token(TokenType::ParenOpen),
-            ')' => self.add_token(TokenType::ParenClose),
-            '[' => self.add_token(TokenType::SquareOpen),
-            ']' => self.add_token(TokenType::SquareClose),
+            '\n' => {
+                self.line += 1;
+                if !self.ignore_newline {
+                    self.add_token(TokenType::StatementEnd);
+                }
+            }
+            '(' => {
+                self.add_token(TokenType::ParenOpen);
+                self.ignore_newline = true;
+            }
+            ')' => {
+                self.add_token(TokenType::ParenClose);
+                self.ignore_newline = false;
+            }
+            '[' => {
+                self.add_token(TokenType::SquareOpen);
+                self.ignore_newline = true;
+            }
+            ']' => {
+                self.add_token(TokenType::SquareClose);
+                self.ignore_newline = false;
+            }
             '{' => self.add_token(TokenType::BraceOpen),
             '}' => self.add_token(TokenType::BraceClose),
             ',' => self.add_token(TokenType::Comma),
@@ -218,7 +248,7 @@ impl Lexer {
         self.tokens.push(Token::new(
             TokenType::EOF,
             String::new(),
-            Box::new(()),
+            Value::None,
             self.line,
         ));
         Ok(self.tokens)

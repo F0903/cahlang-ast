@@ -1,6 +1,4 @@
-use std::any::Any;
-
-use crate::token::Token;
+use crate::token::{Token, Value};
 
 pub enum Expression {
     Binary(Box<BinaryExpression>),
@@ -20,7 +18,7 @@ pub struct GroupingExpression {
 }
 
 pub struct LiteralExpression {
-    pub value: Box<dyn Any>,
+    pub value: Value,
 }
 
 pub struct UnaryExpression {

@@ -1,5 +1,5 @@
-use std::{any::Any, fmt::Display};
-#[derive(Debug, Clone, Copy)]
+use std::fmt::Display;
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
 pub enum TokenType {
     // Single character
     ParenOpen,
@@ -33,6 +33,7 @@ pub enum TokenType {
     Ritual,
     End,
     Return,
+    Is,
     Not,
     And,
     Or,
@@ -52,16 +53,24 @@ pub enum TokenType {
     EOF,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
+pub enum Value {
+    String(String),
+    Number(f64),
+    Boolean(bool),
+    None,
+}
+
+#[derive(Debug, Clone)]
 pub struct Token {
     pub token_type: TokenType,
     pub lexeme: String,
-    pub literal: Box<dyn Any>, //TODO: Maybe use a special enum for this with acceptable values.
+    pub literal: Value,
     pub line: usize,
 }
 
 impl Token {
-    pub fn new(token_type: TokenType, lexeme: String, literal: Box<dyn Any>, line: usize) -> Self {
+    pub fn new(token_type: TokenType, lexeme: String, literal: Value, line: usize) -> Self {
         Self {
             token_type,
             lexeme,

@@ -17,11 +17,7 @@ fn get_expr_string(expr: &Expression) -> String {
         Expression::Binary(expr) => parenthesize(&expr.operator.lexeme, &[&expr.left, &expr.right]),
         Expression::Grouping(expr) => parenthesize("group", &[&(**expr).expr]),
         Expression::Literal(expr) => {
-            if let Some(_) = expr.value.downcast_ref::<()>() {
-                "null".to_owned()
-            } else {
-                format!("{:?}", expr.value)
-            }
+            format!("{:?}", expr.value)
         }
         Expression::Unary(expr) => parenthesize(&expr.operator.lexeme, &[&expr.right]),
     }
