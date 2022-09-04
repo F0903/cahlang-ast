@@ -1,13 +1,90 @@
-use std::io::{stderr, Write};
+use crate::token::Token;
+use lazy_static::lazy_static;
+use std::{
+    error::Error,
+    fmt::Display,
+    io::{stderr, Write},
+    sync::{Mutex, MutexGuard},
+};
 
-use crate::token::{Token, TokenType};
+pub type Result<T> = std::result::Result<T, RuntimeError>;
 
-pub fn report(line: usize, msg: &str) {
-    stderr()
-        .write_fmt(format_args!("{msg} at line {line}\n"))
-        .ok();
+#[derive(Debug)]
+pub struct RuntimeError {
+    token: Token,
+    msg: String,
 }
 
-pub fn error(token: Token, msg: &str) {
-    report(token.line, msg);
+impl RuntimeError {
+    pub fn new(token: Token, msg: impl ToString) -> Self {
+        Self {
+            token,
+            msg: msg.to_string(),
+        }
+    }
+}
+
+impl Display for RuntimeError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.msg)
+    }
+}
+
+impl Error for RuntimeError {}
+
+impl<S: ToString> From<(Token, S)> for RuntimeError {
+    fn from(x: (Token, S)) -> Self {
+        Self {
+            token: x.0,
+            msg: x.1.to_string(),
+        }
+    }
+}
+
+lazy_static! {
+    static ref ERR_HANDLER: Mutex<Box<(dyn ErrorHandler + Sync + Send)>> =
+        Mutex::new(Box::new(StdErrorHandler {
+            had_error: false,
+            had_runtime_error: false
+        }));
+}
+
+pub fn get_err_handler<'a>() -> MutexGuard<'a, Box<(dyn ErrorHandler + Send + Sync)>> {
+    ERR_HANDLER.lock().unwrap()
+}
+
+pub trait ErrorHandler {
+    fn had_error(&self) -> bool;
+    fn report(&self, line: usize, msg: &str);
+    fn error(&mut self, token: Token, msg: &str);
+    fn runtime_error(&mut self, err: RuntimeError);
+}
+
+pub struct StdErrorHandler {
+    had_error: bool,
+    had_runtime_error: bool,
+}
+
+impl ErrorHandler for StdErrorHandler {
+    fn had_error(&self) -> bool {
+        self.had_error
+    }
+
+    fn report(&self, line: usize, msg: &str) {
+        stderr()
+            .write_fmt(format_args!("{msg} at line {line}\n"))
+            .ok();
+    }
+
+    fn error(&mut self, token: Token, msg: &str) {
+        self.report(token.line, msg);
+        self.had_error = true;
+    }
+
+    fn runtime_error(&mut self, err: RuntimeError) {
+        stderr()
+            .write_fmt(format_args!("{}\nat line {}", err.msg, err.token.line))
+            .ok();
+        self.had_runtime_error = true;
+    }
 }

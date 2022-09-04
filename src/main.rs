@@ -1,12 +1,15 @@
 mod ast_printer;
 mod error;
 mod expression;
+mod interpreter;
 mod lexer;
 mod parser;
 mod token;
 mod utils;
+mod value;
 
 use ast_printer::print_ast;
+use interpreter::Interpreter;
 use lexer::Lexer;
 use parser::Parser;
 use std::{
@@ -22,17 +25,19 @@ fn get_source_path() -> Option<String> {
     args.nth(1)
 }
 
-fn run(source: String) -> Result<()> {
+fn run(source: String, interpreter: &mut Interpreter) -> Result<()> {
     let lexer = Lexer::new(source);
     let tokens = lexer.lex()?;
 
     let mut parser = Parser::new(tokens.into_iter());
     let expr = parser.parse();
-    print_ast(expr);
+    print_ast(&expr);
+    interpreter.interpret(expr);
     Ok(())
 }
 
 fn run_interactively() -> Result<()> {
+    let mut interpreter = Interpreter::new();
     let mut stdout = stdout().lock();
     let mut stdin = stdin().lock();
     let mut strbuf = String::new();
@@ -43,16 +48,17 @@ fn run_interactively() -> Result<()> {
         if count == 0 {
             break;
         }
-        run(strbuf.clone()).ok();
+        run(strbuf.clone(), &mut interpreter).ok();
         strbuf.clear();
     }
     Ok(())
 }
 
 fn run_file(path: String) -> Result<()> {
+    let mut interpreter = Interpreter::new();
     let mut buf = String::new();
     File::open(path)?.read_to_string(&mut buf)?;
-    run(buf)?;
+    run(buf, &mut interpreter)?;
     Ok(())
 }
 

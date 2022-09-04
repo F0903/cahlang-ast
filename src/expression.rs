@@ -1,4 +1,4 @@
-use crate::token::{Token, Value};
+use crate::{token::Token, value::Value};
 
 pub enum Expression {
     Binary(Box<BinaryExpression>),

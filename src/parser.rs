@@ -1,35 +1,13 @@
-use std::{error::Error, fmt::Display, iter::Peekable};
+use std::iter::Peekable;
 
 use crate::{
-    error::report,
+    error::{get_err_handler, Result, RuntimeError},
     expression::{
         BinaryExpression, Expression, GroupingExpression, LiteralExpression, UnaryExpression,
     },
-    token::{Token, TokenType, Value},
+    token::{Token, TokenType},
+    value::Value,
 };
-
-type Result<T> = std::result::Result<T, ParseError>;
-
-#[derive(Debug)]
-struct ParseError {
-    msg: String,
-}
-
-impl ParseError {
-    pub fn new(msg: impl ToString) -> Self {
-        Self {
-            msg: msg.to_string(),
-        }
-    }
-}
-
-impl Display for ParseError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(&self.msg)
-    }
-}
-
-impl Error for ParseError {}
 
 pub struct Parser<I: Iterator<Item = Token>> {
     tokens: Peekable<I>,
@@ -44,9 +22,9 @@ impl<I: Iterator<Item = Token>> Parser<I> {
         }
     }
 
-    fn error(token: &Token, msg: &str) -> ParseError {
-        report(token.line, msg);
-        ParseError::new(msg)
+    fn error<T>(token: &Token, msg: &str) -> Result<T> {
+        get_err_handler().report(token.line, msg);
+        Err(RuntimeError::new(token.clone(), msg))
     }
 
     fn check(&mut self, typ: TokenType) -> bool {
@@ -109,7 +87,7 @@ impl<I: Iterator<Item = Token>> Parser<I> {
             self.advance();
         }
 
-        Err(Self::error(self.peek(), err_msg))
+        Self::error(self.peek(), err_msg)
     }
 
     fn handle_primary(&mut self) -> Result<Expression> {
@@ -134,7 +112,7 @@ impl<I: Iterator<Item = Token>> Parser<I> {
             self.consume_if(TokenType::ParenClose, "Expected ')' after expression.")?;
             Ok(Expression::Grouping(Box::new(GroupingExpression { expr })))
         } else {
-            Err(Self::error(self.peek(), "Expected an expression."))
+            Self::error(self.peek(), "Expected an expression.")
         }
     }
 

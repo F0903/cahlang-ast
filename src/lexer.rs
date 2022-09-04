@@ -1,9 +1,5 @@
 use super::{token::Token, Result};
-use crate::{
-    create_string_map,
-    error::report,
-    token::{TokenType, Value},
-};
+use crate::{create_string_map, error::get_err_handler, token::TokenType, value::Value};
 use lazy_static::lazy_static;
 use std::collections::HashMap;
 
@@ -118,7 +114,7 @@ impl Lexer {
         }
 
         if self.at_end() {
-            report(self.line, "Unterminated string.");
+            get_err_handler().report(self.line, "Unterminated string.");
             return;
         }
 
@@ -145,7 +141,7 @@ impl Lexer {
         let value = match self.source[self.start..self.current].parse::<f64>() {
             Ok(x) => x,
             Err(_) => {
-                report(self.line, "Could not parse number!");
+                get_err_handler().report(self.line, "Could not parse number!");
                 return;
             }
         };
@@ -206,13 +202,7 @@ impl Lexer {
             '+' => self.add_token(TokenType::Plus),
             '*' => self.add_token(TokenType::Multiply),
             '/' => self.add_token(TokenType::Divide),
-            '=' => {
-                let token = match self.matches_next('=') {
-                    true => TokenType::EqualEqual,
-                    false => TokenType::Equal,
-                };
-                self.add_token(token);
-            }
+            '=' => self.add_token(TokenType::Equal),
             '<' => {
                 let token = match self.matches_next('=') {
                     true => TokenType::LessEqual,
@@ -240,7 +230,6 @@ impl Lexer {
 
     //TODO: Convert to iterator
     pub fn lex(mut self) -> Result<Vec<Token>> {
-        let chars = self.source.chars();
         while !self.at_end() {
             self.start = self.current;
             self.lex_token();

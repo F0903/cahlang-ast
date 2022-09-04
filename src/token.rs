@@ -1,3 +1,4 @@
+use crate::value::Value;
 use std::fmt::Display;
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
 pub enum TokenType {
@@ -19,7 +20,6 @@ pub enum TokenType {
     Divide,
 
     // Two characters
-    EqualEqual,
     LessEqual,
     GreaterEqual,
 
@@ -51,14 +51,6 @@ pub enum TokenType {
     // Special
     StatementEnd,
     EOF,
-}
-
-#[derive(Debug, Clone)]
-pub enum Value {
-    String(String),
-    Number(f64),
-    Boolean(bool),
-    None,
 }
 
 #[derive(Debug, Clone)]

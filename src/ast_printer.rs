@@ -24,7 +24,7 @@ fn get_expr_string(expr: &Expression) -> String {
 }
 
 //TODO: Currently does f all cause it doesn't know what to print due to the Any type. (make an enum for values)
-pub fn print_ast(ast: Expression) {
-    let str_rep = get_expr_string(&ast);
+pub fn print_ast(ast: &Expression) {
+    let str_rep = get_expr_string(ast);
     println!("{}", str_rep);
 }
