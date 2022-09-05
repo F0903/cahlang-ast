@@ -162,6 +162,22 @@ impl Lexer {
         self.add_token(token_type);
     }
 
+    fn is_maybe_stmt_end(test_type: TokenType) -> bool {
+        [
+            TokenType::BraceClose,
+            TokenType::ParenClose,
+            TokenType::SquareClose,
+            TokenType::True,
+            TokenType::False,
+            TokenType::Number,
+            TokenType::String,
+            TokenType::None,
+            TokenType::End,
+        ]
+        .iter()
+        .any(|x| *x == test_type)
+    }
+
     fn lex_token(&mut self) {
         let next = self.next_char();
         match next {
@@ -175,7 +191,17 @@ impl Lexer {
             '\n' => {
                 self.line += 1;
                 if !self.ignore_newline {
-                    self.add_token(TokenType::StatementEnd);
+                    let len = self.tokens.len();
+                    if len == 0 {
+                        return;
+                    }
+                    let last = match self.tokens.get(len - 1) {
+                        Some(x) => x,
+                        None => return,
+                    };
+                    if Self::is_maybe_stmt_end(last.token_type) {
+                        self.add_token(TokenType::StatementEnd);
+                    }
                 }
             }
             '(' => {
@@ -203,6 +229,16 @@ impl Lexer {
             '*' => self.add_token(TokenType::Multiply),
             '/' => self.add_token(TokenType::Divide),
             '=' => self.add_token(TokenType::Equal),
+            '$' => {
+                let token = if self.matches_next('>') {
+                    TokenType::DollarGreater
+                } else if self.matches_next('<') {
+                    TokenType::DollarLess
+                } else {
+                    return;
+                };
+                self.add_token(token);
+            }
             '<' => {
                 let token = match self.matches_next('=') {
                     true => TokenType::LessEqual,
@@ -235,8 +271,14 @@ impl Lexer {
             self.lex_token();
         }
         self.tokens.push(Token::new(
+            TokenType::StatementEnd,
+            "StatementEnd".to_owned(),
+            Value::None,
+            self.line,
+        ));
+        self.tokens.push(Token::new(
             TokenType::EOF,
-            String::new(),
+            "EOF".to_owned(),
             Value::None,
             self.line,
         ));

@@ -5,6 +5,7 @@ use crate::{
     expression::{
         BinaryExpression, Expression, GroupingExpression, LiteralExpression, UnaryExpression,
     },
+    statement::{ExpressionStatement, PrintStatement, Statement},
     token::{Token, TokenType},
     value::Value,
 };
@@ -85,6 +86,7 @@ impl<I: Iterator<Item = Token>> Parser<I> {
     fn consume_if(&mut self, token_type: TokenType, err_msg: &str) -> Result<()> {
         if self.check(token_type) {
             self.advance();
+            return Ok(());
         }
 
         Self::error(self.peek(), err_msg)
@@ -193,10 +195,40 @@ impl<I: Iterator<Item = Token>> Parser<I> {
         self.handle_equality()
     }
 
-    pub fn parse(&mut self) -> Expression {
-        match self.handle_expression() {
-            Ok(x) => x,
-            Err(_) => todo!(),
+    fn handle_print_statement(&mut self) -> Result<Statement> {
+        let expr = self.handle_expression()?;
+        self.consume_if(
+            TokenType::StatementEnd,
+            "Expected statement end after expression.",
+        )?;
+        Ok(Statement::Print(PrintStatement { expr }))
+    }
+
+    fn handle_expression_statement(&mut self) -> Result<Statement> {
+        let expr = self.handle_expression()?;
+        self.consume_if(
+            TokenType::StatementEnd,
+            "Expected statement end after expression.",
+        )?;
+        Ok(Statement::Expression(ExpressionStatement { expr }))
+    }
+
+    fn handle_statement(&mut self) -> Result<Statement> {
+        if self.match_next(&[TokenType::DollarLess]) {
+            return self.handle_print_statement();
         }
+        self.handle_expression_statement()
+    }
+
+    pub fn parse(&mut self) -> Vec<Statement> {
+        let mut statements = vec![];
+        while !self.at_end() {
+            let statement = match self.handle_statement() {
+                Ok(x) => x,
+                Err(_) => todo!(),
+            };
+            statements.push(statement);
+        }
+        statements
     }
 }

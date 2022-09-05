@@ -1,6 +1,7 @@
 use crate::{
     error::{get_err_handler, Result},
     expression::{BinaryExpression, Expression, UnaryExpression},
+    statement::{ExpressionStatement, PrintStatement, Statement},
     token::{Token, TokenType},
     value::Value,
 };
@@ -267,10 +268,29 @@ impl Interpreter {
         }
     }
 
-    pub fn interpret(&self, expression: Expression) {
-        match self.evaluate(expression) {
-            Ok(x) => println!("{}", x),
-            Err(x) => get_err_handler().runtime_error(x),
+    fn execute_print_statement(&self, statement: PrintStatement) -> Result<()> {
+        let val = self.evaluate(statement.expr)?;
+        println!("{}", val);
+        Ok(())
+    }
+
+    fn execute_expression_statement(&self, statement: ExpressionStatement) -> Result<()> {
+        self.evaluate(statement.expr)?;
+        Ok(())
+    }
+
+    fn execute(&mut self, statement: Statement) -> Result<()> {
+        match statement {
+            Statement::Print(x) => self.execute_print_statement(x),
+            Statement::Expression(x) => self.execute_expression_statement(x),
+        }
+    }
+
+    pub fn interpret(&mut self, statements: Vec<Statement>) {
+        for statement in statements {
+            if let Err(x) = self.execute(statement) {
+                get_err_handler().runtime_error(x);
+            }
         }
     }
 }

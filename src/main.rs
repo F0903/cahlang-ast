@@ -4,6 +4,7 @@ mod expression;
 mod interpreter;
 mod lexer;
 mod parser;
+mod statement;
 mod token;
 mod utils;
 mod value;
@@ -26,13 +27,15 @@ fn get_source_path() -> Option<String> {
 }
 
 fn run(source: String, interpreter: &mut Interpreter) -> Result<()> {
+    println!("{}\n", source);
     let lexer = Lexer::new(source);
     let tokens = lexer.lex()?;
 
+    println!("{:?}", tokens);
+
     let mut parser = Parser::new(tokens.into_iter());
-    let expr = parser.parse();
-    print_ast(&expr);
-    interpreter.interpret(expr);
+    let statements = parser.parse();
+    interpreter.interpret(statements);
     Ok(())
 }
 
@@ -63,8 +66,10 @@ fn run_file(path: String) -> Result<()> {
 }
 
 fn main() -> Result<()> {
-    match get_source_path() {
+    let debug_test = include_str!("../test.cah");
+    run(debug_test.to_owned(), &mut Interpreter::new())
+    /* match get_source_path() {
         Some(x) => run_file(x),
         None => run_interactively(),
-    }
+    } */
 }
