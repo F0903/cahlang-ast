@@ -1,4 +1,10 @@
 ? comment
 
+{
+    offering x = 30
+    $< x
+}
+$< x
+
 $< "Hello world!!!!!"
 $< 2 + 3

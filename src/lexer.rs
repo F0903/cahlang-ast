@@ -1,10 +1,10 @@
 use super::{token::Token, Result};
 use crate::{create_string_map, error::get_err_handler, token::TokenType, value::Value};
-use lazy_static::lazy_static;
+use once_cell::sync::Lazy;
 use std::collections::HashMap;
 
-lazy_static! {
-    static ref KEYWORDS: HashMap<String, TokenType> = create_string_map!(
+static KEYWORDS: Lazy<HashMap<String, TokenType>> = Lazy::new(|| {
+    create_string_map!(
         "and"      => TokenType::And,
         "class"    => TokenType::Class,
         "else"     => TokenType::Else,
@@ -23,8 +23,8 @@ lazy_static! {
         "ritual"   => TokenType::Ritual,
         "end"      => TokenType::End,
         "while"    => TokenType::While
-    );
-}
+    )
+});
 
 pub struct Lexer {
     source: String,
@@ -163,7 +163,7 @@ impl Lexer {
     }
 
     fn is_maybe_stmt_end(test_type: TokenType) -> bool {
-        [
+        static STMT_END_TOKENS: &'static [TokenType] = &[
             TokenType::BraceClose,
             TokenType::ParenClose,
             TokenType::SquareClose,
@@ -173,9 +173,9 @@ impl Lexer {
             TokenType::String,
             TokenType::None,
             TokenType::End,
-        ]
-        .iter()
-        .any(|x| *x == test_type)
+            TokenType::Identifier,
+        ];
+        STMT_END_TOKENS.iter().any(|x| *x == test_type)
     }
 
     fn lex_token(&mut self) {

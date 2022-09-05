@@ -1,5 +1,5 @@
 use crate::token::Token;
-use lazy_static::lazy_static;
+use once_cell::sync::Lazy;
 use std::{
     error::Error,
     fmt::Display,
@@ -41,13 +41,12 @@ impl<S: ToString> From<(Token, S)> for RuntimeError {
     }
 }
 
-lazy_static! {
-    static ref ERR_HANDLER: Mutex<Box<(dyn ErrorHandler + Sync + Send)>> =
-        Mutex::new(Box::new(StdErrorHandler {
-            had_error: false,
-            had_runtime_error: false
-        }));
-}
+static ERR_HANDLER: Lazy<Mutex<Box<(dyn ErrorHandler + Sync + Send)>>> = Lazy::new(|| {
+    Mutex::new(Box::new(StdErrorHandler {
+        had_error: false,
+        had_runtime_error: false,
+    }))
+});
 
 pub fn get_err_handler<'a>() -> MutexGuard<'a, Box<(dyn ErrorHandler + Send + Sync)>> {
     ERR_HANDLER.lock().unwrap()
@@ -82,9 +81,7 @@ impl ErrorHandler for StdErrorHandler {
     }
 
     fn runtime_error(&mut self, err: RuntimeError) {
-        stderr()
-            .write_fmt(format_args!("{}\nat line {}", err.msg, err.token.line))
-            .ok();
+        self.report(err.token.line, &err.msg);
         self.had_runtime_error = true;
     }
 }

@@ -1,16 +1,25 @@
+use std::{cell::RefCell, rc::Rc};
+
 use crate::{
+    environment::{Env, Environment},
     error::{get_err_handler, Result},
-    expression::{BinaryExpression, Expression, UnaryExpression},
-    statement::{ExpressionStatement, PrintStatement, Statement},
+    expression::{
+        AssignExpression, BinaryExpression, Expression, UnaryExpression, VariableExpression,
+    },
+    statement::{BlockStatement, ExpressionStatement, PrintStatement, Statement, VarStatement},
     token::{Token, TokenType},
     value::Value,
 };
 
-pub struct Interpreter {}
+pub struct Interpreter {
+    env: Env,
+}
 
 impl Interpreter {
     pub fn new() -> Self {
-        Self {}
+        Self {
+            env: Rc::new(RefCell::new(Environment::new(None))),
+        }
     }
 
     fn is_truthy(val: Value) -> bool {
@@ -25,7 +34,7 @@ impl Interpreter {
         Err((token, msg).into())
     }
 
-    fn eval_unary(&self, expr: UnaryExpression) -> Result<Value> {
+    fn eval_unary(&mut self, expr: UnaryExpression) -> Result<Value> {
         let right = self.evaluate(expr.right)?;
         let val = match expr.operator.token_type {
             TokenType::Minus => {
@@ -72,7 +81,7 @@ impl Interpreter {
         }
     }
 
-    fn eval_binary(&self, expr: BinaryExpression) -> Result<Value> {
+    fn eval_binary(&mut self, expr: BinaryExpression) -> Result<Value> {
         let left = self.evaluate(expr.left)?;
         let right = self.evaluate(expr.right)?;
         let val = match expr.operator.token_type {
@@ -259,30 +268,70 @@ impl Interpreter {
         Ok(val)
     }
 
-    fn evaluate(&self, expr: Expression) -> Result<Value> {
+    fn eval_variable(&self, expr: VariableExpression) -> Result<Value> {
+        self.env.borrow().get(&expr.name)
+    }
+
+    fn eval_assign(&mut self, expr: AssignExpression) -> Result<Value> {
+        let value = self.evaluate(expr.value)?;
+        self.env.borrow_mut().assign(expr.name, value.clone())?;
+        Ok(value)
+    }
+
+    fn evaluate(&mut self, expr: Expression) -> Result<Value> {
         match expr {
             Expression::Literal(x) => Ok(x.value),
             Expression::Grouping(x) => self.evaluate(x.expr),
             Expression::Unary(x) => self.eval_unary(*x),
             Expression::Binary(x) => self.eval_binary(*x),
+            Expression::Variable(x) => self.eval_variable(*x),
+            Expression::Assign(x) => self.eval_assign(*x),
         }
     }
 
-    fn execute_print_statement(&self, statement: PrintStatement) -> Result<()> {
+    fn execute_print_statement(&mut self, statement: PrintStatement) -> Result<()> {
         let val = self.evaluate(statement.expr)?;
         println!("{}", val);
         Ok(())
     }
 
-    fn execute_expression_statement(&self, statement: ExpressionStatement) -> Result<()> {
+    fn execute_expression_statement(&mut self, statement: ExpressionStatement) -> Result<()> {
         self.evaluate(statement.expr)?;
         Ok(())
+    }
+
+    fn execute_var_statement(&mut self, statement: VarStatement) -> Result<()> {
+        let mut value = Value::None;
+        if let Some(init) = statement.initializer {
+            value = self.evaluate(init)?;
+        }
+        self.env.borrow_mut().define(statement.name.lexeme, value);
+        Ok(())
+    }
+
+    fn execute_block(&mut self, statements: Vec<Statement>, env: Env) -> Result<()> {
+        let previous = self.env.clone();
+        self.env = env;
+        for statement in statements {
+            self.execute(statement).ok();
+        }
+        self.env = previous;
+        Ok(())
+    }
+
+    fn execute_block_statement(&mut self, statement: BlockStatement) -> Result<()> {
+        self.execute_block(
+            statement.statements,
+            Rc::new(RefCell::new(Environment::new(Some(self.env.clone())))),
+        )
     }
 
     fn execute(&mut self, statement: Statement) -> Result<()> {
         match statement {
             Statement::Print(x) => self.execute_print_statement(x),
             Statement::Expression(x) => self.execute_expression_statement(x),
+            Statement::Var(x) => self.execute_var_statement(x),
+            Statement::Block(x) => self.execute_block_statement(x),
         }
     }
 

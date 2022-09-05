@@ -3,9 +3,10 @@ use std::iter::Peekable;
 use crate::{
     error::{get_err_handler, Result, RuntimeError},
     expression::{
-        BinaryExpression, Expression, GroupingExpression, LiteralExpression, UnaryExpression,
+        AssignExpression, BinaryExpression, Expression, GroupingExpression, LiteralExpression,
+        UnaryExpression, VariableExpression,
     },
-    statement::{ExpressionStatement, PrintStatement, Statement},
+    statement::{BlockStatement, ExpressionStatement, PrintStatement, Statement, VarStatement},
     token::{Token, TokenType},
     value::Value,
 };
@@ -49,13 +50,10 @@ impl<I: Iterator<Item = Token>> Parser<I> {
     }
 
     fn advance(&mut self) -> Token {
-        let mut ret = self.last_token.clone();
+        let ret = self.peek().clone();
         let next = self.tokens.next().unwrap();
-        if let None = ret {
-            ret = Some(next.clone());
-        }
         self.last_token = Some(next);
-        return unsafe { ret.unwrap_unchecked() };
+        return ret;
     }
 
     fn match_next(&mut self, types: &[TokenType]) -> bool {
@@ -83,17 +81,20 @@ impl<I: Iterator<Item = Token>> Parser<I> {
         }
     }
 
-    fn consume_if(&mut self, token_type: TokenType, err_msg: &str) -> Result<()> {
+    fn consume_if(&mut self, token_type: TokenType, err_msg: &str) -> Result<Token> {
         if self.check(token_type) {
-            self.advance();
-            return Ok(());
+            return Ok(self.advance());
         }
 
         Self::error(self.peek(), err_msg)
     }
 
     fn handle_primary(&mut self) -> Result<Expression> {
-        if self.match_next(&[TokenType::False]) {
+        if self.match_next(&[TokenType::Identifier]) {
+            Ok(Expression::Variable(Box::new(VariableExpression {
+                name: self.previous(),
+            })))
+        } else if self.match_next(&[TokenType::False]) {
             Ok(Expression::Literal(Box::new(LiteralExpression {
                 value: Value::Boolean(false),
             })))
@@ -191,8 +192,27 @@ impl<I: Iterator<Item = Token>> Parser<I> {
         Ok(expr)
     }
 
+    fn handle_assignment(&mut self) -> Result<Expression> {
+        let expr = self.handle_equality()?;
+        if self.match_next(&[TokenType::Equal]) {
+            let equals = self.previous();
+            let value = self.handle_assignment()?;
+            if let Expression::Variable(x) = expr {
+                let name = x.name;
+                return Ok(Expression::Assign(Box::new(AssignExpression {
+                    name,
+                    value,
+                })));
+            }
+
+            // Dont throw, just report
+            Self::error::<RuntimeError>(&equals, "Invalid assignment target.").ok();
+        }
+        Ok(expr)
+    }
+
     fn handle_expression(&mut self) -> Result<Expression> {
-        self.handle_equality()
+        self.handle_assignment()
     }
 
     fn handle_print_statement(&mut self) -> Result<Statement> {
@@ -213,21 +233,80 @@ impl<I: Iterator<Item = Token>> Parser<I> {
         Ok(Statement::Expression(ExpressionStatement { expr }))
     }
 
+    fn parse_block(&mut self) -> Result<Vec<Statement>> {
+        let mut statements = vec![];
+        while !self.check(TokenType::BraceClose) && !self.at_end() {
+            statements.push(self.handle_declaration()?);
+        }
+        self.consume_if(TokenType::BraceClose, "Expected '}' after block.")?;
+        self.consume_if(
+            TokenType::StatementEnd,
+            "Expected statement end after block.",
+        )?;
+        Ok(statements)
+    }
+
+    fn handle_block_statement(&mut self) -> Result<Statement> {
+        Ok(Statement::Block(BlockStatement {
+            statements: self.parse_block()?,
+        }))
+    }
+
     fn handle_statement(&mut self) -> Result<Statement> {
         if self.match_next(&[TokenType::DollarLess]) {
             return self.handle_print_statement();
+        } else if self.match_next(&[TokenType::BraceOpen]) {
+            return self.handle_block_statement();
         }
         self.handle_expression_statement()
+    }
+
+    fn handle_var_declaration(&mut self) -> Result<Statement> {
+        let name = self.consume_if(TokenType::Identifier, "Expected variable name.")?;
+        let mut initializer = None;
+        if self.match_next(&[TokenType::Equal]) {
+            initializer = Some(self.handle_expression()?);
+        }
+        self.consume_if(
+            TokenType::StatementEnd,
+            "Expected statement end after variable declaration.",
+        )?;
+        Ok(Statement::Var(VarStatement { name, initializer }))
+    }
+
+    fn handle_declaration(&mut self) -> Result<Statement> {
+        let had_err;
+        if self.match_next(&[TokenType::Offering]) {
+            match self.handle_var_declaration() {
+                Ok(x) => return Ok(x),
+                Err(_) => had_err = true,
+            }
+        } else {
+            match self.handle_statement() {
+                Ok(x) => return Ok(x),
+                Err(_) => had_err = true,
+            }
+        }
+
+        if had_err {
+            self.synchronize();
+            // Dont throw error, so just return a None expr statement
+            return Ok(Statement::Expression(ExpressionStatement {
+                expr: Expression::Literal(Box::new(LiteralExpression { value: Value::None })),
+            }));
+        }
+
+        Self::error(self.peek(), "Unexpected token in declaration.")
     }
 
     pub fn parse(&mut self) -> Vec<Statement> {
         let mut statements = vec![];
         while !self.at_end() {
-            let statement = match self.handle_statement() {
+            let decl_statement = match self.handle_declaration() {
                 Ok(x) => x,
                 Err(_) => todo!(),
             };
-            statements.push(statement);
+            statements.push(decl_statement);
         }
         statements
     }

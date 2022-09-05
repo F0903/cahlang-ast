@@ -1,4 +1,4 @@
-mod ast_printer;
+mod environment;
 mod error;
 mod expression;
 mod interpreter;
@@ -9,7 +9,6 @@ mod token;
 mod utils;
 mod value;
 
-use ast_printer::print_ast;
 use interpreter::Interpreter;
 use lexer::Lexer;
 use parser::Parser;
@@ -20,6 +19,9 @@ use std::{
 };
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
+
+const DEBUG_TEST_FILE: &str = include_str!("../test.cah");
+const RUN_DEBUG_FILE: bool = true;
 
 fn get_source_path() -> Option<String> {
     let mut args = args();
@@ -66,10 +68,12 @@ fn run_file(path: String) -> Result<()> {
 }
 
 fn main() -> Result<()> {
-    let debug_test = include_str!("../test.cah");
-    run(debug_test.to_owned(), &mut Interpreter::new())
-    /* match get_source_path() {
+    if RUN_DEBUG_FILE {
+        let mut intr = Interpreter::new();
+        return run(DEBUG_TEST_FILE.to_owned(), &mut intr);
+    }
+    match get_source_path() {
         Some(x) => run_file(x),
         None => run_interactively(),
-    } */
+    }
 }
