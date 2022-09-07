@@ -34,6 +34,13 @@ pub struct AssignExpression {
     pub value: Expression,
 }
 
+#[derive(Debug)]
+pub struct LogicalExpression {
+    pub left: Expression,
+    pub operator: Token,
+    pub right: Expression,
+}
+
 // Look into not boxing the values?
 #[derive(Debug)]
 pub enum Expression {
@@ -43,4 +50,5 @@ pub enum Expression {
     Unary(Box<UnaryExpression>),
     Variable(Box<VariableExpression>),
     Assign(Box<AssignExpression>),
+    Logical(Box<LogicalExpression>),
 }
