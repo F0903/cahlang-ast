@@ -4,9 +4,13 @@ use crate::{
     environment::{Env, Environment},
     error::{get_err_handler, Result},
     expression::{
-        AssignExpression, BinaryExpression, Expression, UnaryExpression, VariableExpression,
+        AssignExpression, BinaryExpression, Expression, LogicalExpression, UnaryExpression,
+        VariableExpression,
     },
-    statement::{BlockStatement, ExpressionStatement, PrintStatement, Statement, VarStatement},
+    statement::{
+        BlockStatement, ExpressionStatement, IfStatement, PrintStatement, Statement, VarStatement,
+        WhileStatement,
+    },
     token::{Token, TokenType},
     value::Value,
 };
@@ -22,10 +26,10 @@ impl Interpreter {
         }
     }
 
-    fn is_truthy(val: Value) -> bool {
+    fn is_truthy(val: &Value) -> bool {
         match val {
             Value::None => false,
-            Value::Boolean(x) => x,
+            Value::Boolean(x) => *x,
             _ => true,
         }
     }
@@ -34,25 +38,25 @@ impl Interpreter {
         Err((token, msg).into())
     }
 
-    fn eval_unary(&mut self, expr: UnaryExpression) -> Result<Value> {
-        let right = self.evaluate(expr.right)?;
+    fn eval_unary(&mut self, expr: &UnaryExpression) -> Result<Value> {
+        let right = self.evaluate(&expr.right)?;
         let val = match expr.operator.token_type {
             TokenType::Minus => {
                 let val = match right {
                     Value::Number(x) => x,
                     _ => {
                         return Self::error(
-                            expr.operator,
+                            expr.operator.clone(),
                             "Minus unary operator can only be used on numbers.",
                         )
                     }
                 };
                 Value::Number(-val)
             }
-            TokenType::Not => Value::Boolean(!Self::is_truthy(right)),
+            TokenType::Not => Value::Boolean(!Self::is_truthy(&right)),
             _ => {
                 return Self::error(
-                    expr.operator,
+                    expr.operator.clone(),
                     "Minus unary operator can only be used on numbers.",
                 )
             }
@@ -81,16 +85,16 @@ impl Interpreter {
         }
     }
 
-    fn eval_binary(&mut self, expr: BinaryExpression) -> Result<Value> {
-        let left = self.evaluate(expr.left)?;
-        let right = self.evaluate(expr.right)?;
+    fn eval_binary(&mut self, expr: &BinaryExpression) -> Result<Value> {
+        let left = self.evaluate(&expr.left)?;
+        let right = self.evaluate(&expr.right)?;
         let val = match expr.operator.token_type {
             TokenType::Minus => {
                 let left_val = match left {
                     Value::Number(x) => x,
                     _ => {
                         return Self::error(
-                            expr.operator,
+                            expr.operator.clone(),
                             "Minus binary operator can only be used on numbers.",
                         )
                     }
@@ -99,7 +103,7 @@ impl Interpreter {
                     Value::Number(x) => x,
                     _ => {
                         return Self::error(
-                            expr.operator,
+                            expr.operator.clone(),
                             "Minus binary operator can only be used on numbers.",
                         )
                     }
@@ -111,7 +115,7 @@ impl Interpreter {
                     Value::Number(x) => x,
                     _ => {
                         return Self::error(
-                            expr.operator,
+                            expr.operator.clone(),
                             "Divide binary operator can only be used on numbers.",
                         )
                     }
@@ -120,7 +124,7 @@ impl Interpreter {
                     Value::Number(x) => x,
                     _ => {
                         return Self::error(
-                            expr.operator,
+                            expr.operator.clone(),
                             "Divide binary operator can only be used on numbers.",
                         )
                     }
@@ -132,7 +136,7 @@ impl Interpreter {
                     Value::Number(x) => x,
                     _ => {
                         return Self::error(
-                            expr.operator,
+                            expr.operator.clone(),
                             "Multiply binary operator can only be used on numbers.",
                         )
                     }
@@ -141,7 +145,7 @@ impl Interpreter {
                     Value::Number(x) => x,
                     _ => {
                         return Self::error(
-                            expr.operator,
+                            expr.operator.clone(),
                             "Multiply binary operator can only be used on numbers.",
                         )
                     }
@@ -159,7 +163,7 @@ impl Interpreter {
                             Value::None => Value::String(x + "none"),
                             _ => {
                                 return Self::error(
-                                    expr.operator,
+                                    expr.operator.clone(),
                                     "Unknown right operand in string concat.",
                                 )
                             }
@@ -169,11 +173,14 @@ impl Interpreter {
                     if let Value::Number(y) = right {
                         Value::Number(x + y)
                     } else {
-                        return Self::error(expr.operator, "Cannot add non-number to number.");
+                        return Self::error(
+                            expr.operator.clone(),
+                            "Cannot add non-number to number.",
+                        );
                     }
                 } else {
                     return Self::error(
-                        expr.operator,
+                        expr.operator.clone(),
                         "Plus binary operator can only be used with strings or numbers",
                     );
                 }
@@ -183,7 +190,7 @@ impl Interpreter {
                     Value::Number(x) => x,
                     _ => {
                         return Self::error(
-                            expr.operator,
+                            expr.operator.clone(),
                             "Greater binary operator can only be used on numbers.",
                         )
                     }
@@ -192,7 +199,7 @@ impl Interpreter {
                     Value::Number(x) => x,
                     _ => {
                         return Self::error(
-                            expr.operator,
+                            expr.operator.clone(),
                             "Greater binary operator can only be used on numbers.",
                         )
                     }
@@ -204,7 +211,7 @@ impl Interpreter {
                     Value::Number(x) => x,
                     _ => {
                         return Self::error(
-                            expr.operator,
+                            expr.operator.clone(),
                             "Greater-or-Equal binary operator can only be used on numbers.",
                         )
                     }
@@ -213,7 +220,7 @@ impl Interpreter {
                     Value::Number(x) => x,
                     _ => {
                         return Self::error(
-                            expr.operator,
+                            expr.operator.clone(),
                             "Greater-or-Equal binary operator can only be used on numbers.",
                         )
                     }
@@ -225,7 +232,7 @@ impl Interpreter {
                     Value::Number(x) => x,
                     _ => {
                         return Self::error(
-                            expr.operator,
+                            expr.operator.clone(),
                             "Less binary operator can only be used on numbers.",
                         )
                     }
@@ -234,7 +241,7 @@ impl Interpreter {
                     Value::Number(x) => x,
                     _ => {
                         return Self::error(
-                            expr.operator,
+                            expr.operator.clone(),
                             "Less binary operator can only be used on numbers.",
                         )
                     }
@@ -246,7 +253,7 @@ impl Interpreter {
                     Value::Number(x) => x,
                     _ => {
                         return Self::error(
-                            expr.operator,
+                            expr.operator.clone(),
                             "Less-or-Equal binary operator can only be used on numbers.",
                         )
                     }
@@ -255,7 +262,7 @@ impl Interpreter {
                     Value::Number(x) => x,
                     _ => {
                         return Self::error(
-                            expr.operator,
+                            expr.operator.clone(),
                             "Less-or-Equal binary operator can only be used on numbers.",
                         )
                     }
@@ -263,53 +270,75 @@ impl Interpreter {
                 Value::Boolean(left_val <= right_val)
             }
             TokenType::Is => Value::Boolean(Self::is_equal(left, right)),
-            _ => return Self::error(expr.operator, "Unknown operator in binary expression."),
+            _ => {
+                return Self::error(
+                    expr.operator.clone(),
+                    "Unknown operator in binary expression.",
+                )
+            }
         };
         Ok(val)
     }
 
-    fn eval_variable(&self, expr: VariableExpression) -> Result<Value> {
+    fn eval_variable(&self, expr: &VariableExpression) -> Result<Value> {
         self.env.borrow().get(&expr.name)
     }
 
-    fn eval_assign(&mut self, expr: AssignExpression) -> Result<Value> {
-        let value = self.evaluate(expr.value)?;
-        self.env.borrow_mut().assign(expr.name, value.clone())?;
+    fn eval_assign(&mut self, expr: &AssignExpression) -> Result<Value> {
+        let value = self.evaluate(&expr.value)?;
+        self.env.borrow_mut().assign(&expr.name, value.clone())?;
         Ok(value)
     }
 
-    fn evaluate(&mut self, expr: Expression) -> Result<Value> {
+    fn eval_logical(&mut self, expr: &LogicalExpression) -> Result<Value> {
+        let left = self.evaluate(&expr.left)?;
+        if expr.operator.token_type == TokenType::Or {
+            if Self::is_truthy(&left) {
+                return Ok(left);
+            }
+        } else {
+            if !Self::is_truthy(&left) {
+                return Ok(left);
+            }
+        }
+        Ok(self.evaluate(&expr.right)?)
+    }
+
+    fn evaluate(&mut self, expr: &Expression) -> Result<Value> {
         match expr {
-            Expression::Literal(x) => Ok(x.value),
-            Expression::Grouping(x) => self.evaluate(x.expr),
-            Expression::Unary(x) => self.eval_unary(*x),
-            Expression::Binary(x) => self.eval_binary(*x),
-            Expression::Variable(x) => self.eval_variable(*x),
-            Expression::Assign(x) => self.eval_assign(*x),
+            Expression::Literal(x) => Ok(x.value.clone()),
+            Expression::Grouping(x) => self.evaluate(&x.expr),
+            Expression::Unary(x) => self.eval_unary(&*x),
+            Expression::Binary(x) => self.eval_binary(&*x),
+            Expression::Variable(x) => self.eval_variable(&*x),
+            Expression::Assign(x) => self.eval_assign(&*x),
+            Expression::Logical(x) => self.eval_logical(&*x),
         }
     }
 
-    fn execute_print_statement(&mut self, statement: PrintStatement) -> Result<()> {
-        let val = self.evaluate(statement.expr)?;
+    fn execute_print_statement(&mut self, statement: &PrintStatement) -> Result<()> {
+        let val = self.evaluate(&statement.expr)?;
         println!("{}", val);
         Ok(())
     }
 
-    fn execute_expression_statement(&mut self, statement: ExpressionStatement) -> Result<()> {
-        self.evaluate(statement.expr)?;
+    fn execute_expression_statement(&mut self, statement: &ExpressionStatement) -> Result<()> {
+        self.evaluate(&statement.expr)?;
         Ok(())
     }
 
-    fn execute_var_statement(&mut self, statement: VarStatement) -> Result<()> {
+    fn execute_var_statement(&mut self, statement: &VarStatement) -> Result<()> {
         let mut value = Value::None;
-        if let Some(init) = statement.initializer {
-            value = self.evaluate(init)?;
+        if let Some(init) = &statement.initializer {
+            value = self.evaluate(&init)?;
         }
-        self.env.borrow_mut().define(statement.name.lexeme, value);
+        self.env
+            .borrow_mut()
+            .define(statement.name.lexeme.clone(), value);
         Ok(())
     }
 
-    fn execute_block(&mut self, statements: Vec<Statement>, env: Env) -> Result<()> {
+    fn execute_block(&mut self, statements: &[Statement], env: Env) -> Result<()> {
         let previous = self.env.clone();
         self.env = env;
         for statement in statements {
@@ -319,25 +348,43 @@ impl Interpreter {
         Ok(())
     }
 
-    fn execute_block_statement(&mut self, statement: BlockStatement) -> Result<()> {
+    fn execute_block_statement(&mut self, statement: &BlockStatement) -> Result<()> {
         self.execute_block(
-            statement.statements,
+            &statement.statements,
             Rc::new(RefCell::new(Environment::new(Some(self.env.clone())))),
         )
     }
 
-    fn execute(&mut self, statement: Statement) -> Result<()> {
+    fn execute_if_statement(&mut self, statement: &IfStatement) -> Result<()> {
+        if Self::is_truthy(&self.evaluate(&statement.condition)?) {
+            self.execute_block_statement(&statement.then_branch)?;
+        } else if let Some(x) = &statement.else_branch {
+            self.execute_block_statement(&x)?;
+        }
+        Ok(())
+    }
+
+    fn execute_while_statement(&mut self, statement: &WhileStatement) -> Result<()> {
+        while Self::is_truthy(&self.evaluate(&statement.condition)?) {
+            self.execute_block_statement(&statement.body)?;
+        }
+        Ok(())
+    }
+
+    fn execute(&mut self, statement: &Statement) -> Result<()> {
         match statement {
             Statement::Print(x) => self.execute_print_statement(x),
             Statement::Expression(x) => self.execute_expression_statement(x),
             Statement::Var(x) => self.execute_var_statement(x),
             Statement::Block(x) => self.execute_block_statement(x),
+            Statement::If(x) => self.execute_if_statement(x),
+            Statement::While(x) => self.execute_while_statement(x),
         }
     }
 
     pub fn interpret(&mut self, statements: Vec<Statement>) {
         for statement in statements {
-            if let Err(x) = self.execute(statement) {
+            if let Err(x) = self.execute(&statement) {
                 get_err_handler().runtime_error(x);
             }
         }

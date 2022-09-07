@@ -1,12 +1,16 @@
+use core::panic;
 use std::iter::Peekable;
 
 use crate::{
     error::{get_err_handler, Result, RuntimeError},
     expression::{
         AssignExpression, BinaryExpression, Expression, GroupingExpression, LiteralExpression,
-        UnaryExpression, VariableExpression,
+        LogicalExpression, UnaryExpression, VariableExpression,
     },
-    statement::{BlockStatement, ExpressionStatement, PrintStatement, Statement, VarStatement},
+    statement::{
+        BlockStatement, ExpressionStatement, IfStatement, PrintStatement, Statement, VarStatement,
+        WhileStatement,
+    },
     token::{Token, TokenType},
     value::Value,
 };
@@ -192,8 +196,36 @@ impl<I: Iterator<Item = Token>> Parser<I> {
         Ok(expr)
     }
 
+    fn handle_and(&mut self) -> Result<Expression> {
+        let mut expr = self.handle_equality()?;
+        while self.match_next(&[TokenType::And]) {
+            let operator = self.previous();
+            let right = self.handle_equality()?;
+            expr = Expression::Logical(Box::new(LogicalExpression {
+                left: expr,
+                operator,
+                right,
+            }))
+        }
+        Ok(expr)
+    }
+
+    fn handle_or(&mut self) -> Result<Expression> {
+        let mut expr = self.handle_and()?;
+        while self.match_next(&[TokenType::And]) {
+            let operator = self.previous();
+            let right = self.handle_and()?;
+            expr = Expression::Logical(Box::new(LogicalExpression {
+                left: expr,
+                operator,
+                right,
+            }));
+        }
+        Ok(expr)
+    }
+
     fn handle_assignment(&mut self) -> Result<Expression> {
-        let expr = self.handle_equality()?;
+        let expr = self.handle_or()?;
         if self.match_next(&[TokenType::Equal]) {
             let equals = self.previous();
             let value = self.handle_assignment()?;
@@ -252,13 +284,49 @@ impl<I: Iterator<Item = Token>> Parser<I> {
         }))
     }
 
+    fn handle_if_statement(&mut self) -> Result<Statement> {
+        let condition = self.handle_expression()?;
+        let then_branch = match self.handle_statement()? {
+            Statement::Block(x) => x,
+            _ => return Self::error(&self.previous(), "Expected a block statement after if."),
+        };
+        let mut else_branch = None;
+        if self.match_next(&[TokenType::Else]) {
+            else_branch = match self.handle_statement()? {
+                Statement::Block(x) => Some(x),
+                _ => {
+                    return Self::error(&self.previous(), "Expected a block statement after else.")
+                }
+            };
+        }
+        Ok(Statement::If(IfStatement {
+            condition,
+            then_branch,
+            else_branch,
+        }))
+    }
+
+    fn handle_while_statement(&mut self) -> Result<Statement> {
+        let condition = self.handle_expression()?;
+        let body = match self.handle_statement()? {
+            Statement::Block(x) => x,
+            _ => return Self::error(&self.previous(), "Expected block statement after 'while'."),
+        };
+        Ok(Statement::While(WhileStatement { condition, body }))
+    }
+
     fn handle_statement(&mut self) -> Result<Statement> {
         if self.match_next(&[TokenType::DollarLess]) {
-            return self.handle_print_statement();
+            self.handle_print_statement()
         } else if self.match_next(&[TokenType::BraceOpen]) {
-            return self.handle_block_statement();
+            self.handle_block_statement()
+        } else if self.match_next(&[TokenType::If]) {
+            self.handle_if_statement()
+        } else if self.match_next(&[TokenType::While]) {
+            self.handle_while_statement()
+        } else {
+            self.handle_expression_statement()
         }
-        self.handle_expression_statement()
     }
 
     fn handle_var_declaration(&mut self) -> Result<Statement> {
@@ -304,7 +372,7 @@ impl<I: Iterator<Item = Token>> Parser<I> {
         while !self.at_end() {
             let decl_statement = match self.handle_declaration() {
                 Ok(x) => x,
-                Err(_) => todo!(),
+                Err(err) => panic!("Unhandled error in parser: {}", err),
             };
             statements.push(decl_statement);
         }

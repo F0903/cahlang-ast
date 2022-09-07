@@ -24,6 +24,10 @@ pub enum TokenType {
     GreaterEqual,
     DollarGreater,
     DollarLess,
+    PlusPlus,
+    MinusMinus,
+    EqualPlus,
+    EqualMinus,
 
     // Literals
     String,

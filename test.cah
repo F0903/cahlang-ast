@@ -1,10 +1,7 @@
 ? comment
 
-{
-    offering x = 30
-    $< x
+offering a = 5
+while a < 10 {
+    $< "a is now: " + a
+    a = a + 1
 }
-$< x
-
-$< "Hello world!!!!!"
-$< 2 + 3

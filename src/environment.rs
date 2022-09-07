@@ -21,16 +21,16 @@ impl<'a> Environment {
         }
     }
 
-    fn undef_var_err<T>(name: Token) -> Result<T> {
+    fn undef_var_err<T>(name: &Token) -> Result<T> {
         let msg = format!("Undefined variable '{}'", &name.lexeme);
-        Err(RuntimeError::new(name, msg))
+        Err(RuntimeError::new(name.clone(), msg))
     }
 
     pub fn define(&mut self, name: String, value: Value) {
         self.values.insert(name, value);
     }
 
-    pub fn assign(&mut self, name: Token, value: Value) -> Result<()> {
+    pub fn assign(&mut self, name: &Token, value: Value) -> Result<()> {
         let val = match self.values.get_mut(&name.lexeme) {
             Some(x) => x,
             None => {
@@ -55,7 +55,7 @@ impl<'a> Environment {
                         Err(_) => (),
                     }
                 }
-                Self::undef_var_err(name.clone())
+                Self::undef_var_err(&name)
             }
         }
     }
