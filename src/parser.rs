@@ -5,7 +5,7 @@ use crate::{
     error::{get_err_handler, Result, RuntimeError},
     expression::{
         AssignExpression, BinaryExpression, Expression, GroupingExpression, LiteralExpression,
-        LogicalExpression, PostfixExpression, UnaryExpression, VariableExpression,
+        LogicalExpression, UnaryExpression, VariableExpression,
     },
     statement::{
         BlockStatement, ExpressionStatement, IfStatement, PrintStatement, Statement, VarStatement,
@@ -127,10 +127,27 @@ impl<I: Iterator<Item = Token>> Parser<I> {
         let primary = self.handle_primary()?;
         if let Expression::Variable(x) = primary {
             if self.match_next(&[TokenType::MinusMinus, TokenType::PlusPlus]) {
-                return Ok(Expression::Postfix(Box::new(PostfixExpression {
-                    left: Expression::Variable(x),
-                    operator: self.previous(),
-                })));
+                let prev_token = self.previous();
+                let op_type = match prev_token.token_type {
+                    TokenType::MinusMinus => TokenType::Minus,
+                    TokenType::PlusPlus => TokenType::Plus,
+                    _ => return Self::error(&prev_token, "Unknown token in postfix operator."),
+                };
+                let operator = Token {
+                    token_type: op_type,
+                    ..prev_token
+                };
+                let start = Expression::Assign(Box::new(AssignExpression {
+                    name: x.name.clone(),
+                    value: Expression::Binary(Box::new(BinaryExpression {
+                        left: Expression::Variable(x),
+                        operator,
+                        right: Expression::Literal(Box::new(LiteralExpression {
+                            value: Value::Number(1.0),
+                        })),
+                    })),
+                }));
+                return Ok(start);
             }
             return Ok(Expression::Variable(x));
         }
@@ -370,6 +387,7 @@ impl<I: Iterator<Item = Token>> Parser<I> {
             }
         }
 
+        //TODO: Test that his works when expected
         if had_err {
             self.synchronize();
             // Dont throw error, so just return a None expr statement
