@@ -1,7 +1,8 @@
 ? comment
 
 offering a = 5
-while a < 10 {
-    $< "a is now: " + a
-    a = a + 1
+a++
+if a > 5 {
+    a--
+    $< a
 }

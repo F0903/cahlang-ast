@@ -29,6 +29,12 @@ pub struct VariableExpression {
 }
 
 #[derive(Debug)]
+pub struct PostfixExpression {
+    pub operator: Token,
+    pub left: Expression,
+}
+
+#[derive(Debug)]
 pub struct AssignExpression {
     pub name: Token,
     pub value: Expression,
@@ -48,6 +54,7 @@ pub enum Expression {
     Grouping(Box<GroupingExpression>),
     Literal(Box<LiteralExpression>),
     Unary(Box<UnaryExpression>),
+    Postfix(Box<PostfixExpression>),
     Variable(Box<VariableExpression>),
     Assign(Box<AssignExpression>),
     Logical(Box<LogicalExpression>),

@@ -4,8 +4,8 @@ use crate::{
     environment::{Env, Environment},
     error::{get_err_handler, Result},
     expression::{
-        AssignExpression, BinaryExpression, Expression, LogicalExpression, UnaryExpression,
-        VariableExpression,
+        AssignExpression, BinaryExpression, Expression, LogicalExpression, PostfixExpression,
+        UnaryExpression, VariableExpression,
     },
     statement::{
         BlockStatement, ExpressionStatement, IfStatement, PrintStatement, Statement, VarStatement,
@@ -62,6 +62,35 @@ impl Interpreter {
             }
         };
         Ok(val)
+    }
+
+    fn eval_postfix(&mut self, expr: &PostfixExpression) -> Result<Value> {
+        let var = match &expr.left {
+            Expression::Variable(x) => x,
+            _ => {
+                return Self::error(
+                    expr.operator.clone(),
+                    "Expected variable in postfix operator.",
+                )
+            }
+        };
+        let mut env = self.env.borrow_mut();
+        let old_val = match env.get(&var.name)? {
+            Value::Number(x) => x,
+            _ => {
+                return Self::error(
+                    expr.operator.clone(),
+                    "Postfix operators can only be used with numbers.",
+                )
+            }
+        };
+        let new_val = match expr.operator.token_type {
+            TokenType::MinusMinus => Value::Number(old_val - 1.0),
+            TokenType::PlusPlus => Value::Number(old_val + 1.0),
+            _ => return Self::error(expr.operator.clone(), "Unrecognized postfix operator."),
+        };
+        env.assign(&var.name, new_val.clone())?;
+        Ok(new_val)
     }
 
     fn is_equal(a: Value, b: Value) -> bool {
@@ -309,6 +338,7 @@ impl Interpreter {
             Expression::Literal(x) => Ok(x.value.clone()),
             Expression::Grouping(x) => self.evaluate(&x.expr),
             Expression::Unary(x) => self.eval_unary(&*x),
+            Expression::Postfix(x) => self.eval_postfix(&*x),
             Expression::Binary(x) => self.eval_binary(&*x),
             Expression::Variable(x) => self.eval_variable(&*x),
             Expression::Assign(x) => self.eval_assign(&*x),

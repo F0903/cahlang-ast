@@ -5,7 +5,7 @@ use crate::{
     error::{get_err_handler, Result, RuntimeError},
     expression::{
         AssignExpression, BinaryExpression, Expression, GroupingExpression, LiteralExpression,
-        LogicalExpression, UnaryExpression, VariableExpression,
+        LogicalExpression, PostfixExpression, UnaryExpression, VariableExpression,
     },
     statement::{
         BlockStatement, ExpressionStatement, IfStatement, PrintStatement, Statement, VarStatement,
@@ -96,7 +96,7 @@ impl<I: Iterator<Item = Token>> Parser<I> {
     fn handle_primary(&mut self) -> Result<Expression> {
         if self.match_next(&[TokenType::Identifier]) {
             Ok(Expression::Variable(Box::new(VariableExpression {
-                name: self.previous(),
+                name: self.previous().clone(),
             })))
         } else if self.match_next(&[TokenType::False]) {
             Ok(Expression::Literal(Box::new(LiteralExpression {
@@ -123,6 +123,20 @@ impl<I: Iterator<Item = Token>> Parser<I> {
         }
     }
 
+    fn handle_postfix(&mut self) -> Result<Expression> {
+        let primary = self.handle_primary()?;
+        if let Expression::Variable(x) = primary {
+            if self.match_next(&[TokenType::MinusMinus, TokenType::PlusPlus]) {
+                return Ok(Expression::Postfix(Box::new(PostfixExpression {
+                    left: Expression::Variable(x),
+                    operator: self.previous(),
+                })));
+            }
+            return Ok(Expression::Variable(x));
+        }
+        Ok(primary)
+    }
+
     fn handle_unary(&mut self) -> Result<Expression> {
         if self.match_next(&[TokenType::Not, TokenType::Minus]) {
             let operator = self.previous();
@@ -132,7 +146,7 @@ impl<I: Iterator<Item = Token>> Parser<I> {
                 right,
             })));
         }
-        self.handle_primary()
+        self.handle_postfix()
     }
 
     fn handle_factor(&mut self) -> Result<Expression> {
