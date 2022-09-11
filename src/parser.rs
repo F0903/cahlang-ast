@@ -270,6 +270,26 @@ impl<I: Iterator<Item = Token>> Parser<I> {
 
             // Dont throw, just report
             Self::error::<RuntimeError>(&equals, "Invalid assignment target.").ok();
+        } else if self.match_next(&[TokenType::PlusEqual, TokenType::MinusEqual]) {
+            let prev = self.previous();
+            let token_type = match prev.token_type {
+                TokenType::PlusEqual => TokenType::Plus,
+                TokenType::MinusEqual => TokenType::Minus,
+                _ => return Self::error(&prev, "Unknown operator type in +=/-= operator."),
+            };
+            let operator = Token { token_type, ..prev };
+            let value = self.handle_assignment()?;
+            if let Expression::Variable(x) = expr {
+                let name = x.name;
+                return Ok(Expression::Assign(Box::new(AssignExpression {
+                    name: name.clone(),
+                    value: Expression::Binary(Box::new(BinaryExpression {
+                        left: Expression::Variable(Box::new(VariableExpression { name })),
+                        operator,
+                        right: value,
+                    })),
+                })));
+            }
         }
         Ok(expr)
     }

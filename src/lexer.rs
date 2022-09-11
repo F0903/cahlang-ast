@@ -214,6 +214,8 @@ impl Lexer {
             '-' => {
                 if self.matches_next('-') {
                     self.add_token(TokenType::MinusMinus)
+                } else if self.matches_next('=') {
+                    self.add_token(TokenType::MinusEqual)
                 } else {
                     self.add_token(TokenType::Minus)
                 }
@@ -221,6 +223,8 @@ impl Lexer {
             '+' => {
                 if self.matches_next('+') {
                     self.add_token(TokenType::PlusPlus)
+                } else if self.matches_next('=') {
+                    self.add_token(TokenType::PlusEqual)
                 } else {
                     self.add_token(TokenType::Plus)
                 }
