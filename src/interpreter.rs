@@ -4,26 +4,38 @@ use crate::{
     environment::{Env, Environment},
     error::{get_err_handler, Result},
     expression::{
-        AssignExpression, BinaryExpression, Expression, LogicalExpression, UnaryExpression,
-        VariableExpression,
+        AssignExpression, BinaryExpression, CallExpression, Expression, LogicalExpression,
+        UnaryExpression, VariableExpression,
     },
     statement::{
         BlockStatement, ExpressionStatement, IfStatement, PrintStatement, Statement, VarStatement,
         WhileStatement,
     },
     token::{Token, TokenType},
-    value::Value,
+    value::{NativeFunc, Value},
 };
 
 pub struct Interpreter {
+    globals: Env,
     env: Env,
 }
 
 impl Interpreter {
     pub fn new() -> Self {
+        let globals = Rc::new(RefCell::new(Environment::new(None)));
         Self {
-            env: Rc::new(RefCell::new(Environment::new(None))),
+            globals: globals.clone(),
+            env: globals,
         }
+    }
+
+    pub fn register_native(&self, func: NativeFunc) {
+        let mut env = self.env.borrow_mut();
+        env.define(func.get_name().to_owned(), Value::Callable(Box::new(func)));
+    }
+
+    pub fn get_current_env(&self) -> Env {
+        self.env.clone()
     }
 
     fn is_truthy(val: &Value) -> bool {
@@ -82,6 +94,7 @@ impl Interpreter {
                 Value::String(y) => x == y,
                 _ => false,
             },
+            Value::Callable(_) => false,
         }
     }
 
@@ -304,6 +317,27 @@ impl Interpreter {
         Ok(self.evaluate(&expr.right)?)
     }
 
+    fn eval_call(&mut self, expr: &CallExpression) -> Result<Value> {
+        let callee = self.evaluate(&expr.callee)?;
+        let mut args = vec![];
+        for arg in &expr.args {
+            args.push(self.evaluate(arg)?);
+        }
+        let callable = match callee {
+            Value::Callable(x) => x,
+            _ => return Self::error(expr.paren.clone(), "Expected callable object."),
+        };
+        let arg_num = args.len();
+        let arg_needed = callable.get_arity();
+        if arg_num != arg_needed {
+            return Self::error(
+                expr.paren.clone(),
+                format!("Exptected {} arguments, but got {}", arg_needed, arg_num),
+            );
+        }
+        Ok(callable.call(&self, args))
+    }
+
     fn evaluate(&mut self, expr: &Expression) -> Result<Value> {
         match expr {
             Expression::Literal(x) => Ok(x.value.clone()),
@@ -313,6 +347,7 @@ impl Interpreter {
             Expression::Variable(x) => self.eval_variable(&*x),
             Expression::Assign(x) => self.eval_assign(&*x),
             Expression::Logical(x) => self.eval_logical(&*x),
+            Expression::Call(x) => self.eval_call(&*x),
         }
     }
 

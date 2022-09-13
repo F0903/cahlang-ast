@@ -1,5 +1,7 @@
 ? comment
 
+hello_world()
+
 offering a = 5
 a += 15
 a -= 2

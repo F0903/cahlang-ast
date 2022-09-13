@@ -8,6 +8,13 @@ pub struct BinaryExpression {
 }
 
 #[derive(Debug)]
+pub struct CallExpression {
+    pub callee: Expression,
+    pub paren: Token,
+    pub args: Vec<Expression>,
+}
+
+#[derive(Debug)]
 pub struct GroupingExpression {
     pub expr: Expression,
 }
@@ -45,6 +52,7 @@ pub struct LogicalExpression {
 #[derive(Debug)]
 pub enum Expression {
     Binary(Box<BinaryExpression>),
+    Call(Box<CallExpression>),
     Grouping(Box<GroupingExpression>),
     Literal(Box<LiteralExpression>),
     Unary(Box<UnaryExpression>),

@@ -4,8 +4,8 @@ use std::iter::Peekable;
 use crate::{
     error::{get_err_handler, Result, RuntimeError},
     expression::{
-        AssignExpression, BinaryExpression, Expression, GroupingExpression, LiteralExpression,
-        LogicalExpression, UnaryExpression, VariableExpression,
+        AssignExpression, BinaryExpression, CallExpression, Expression, GroupingExpression,
+        LiteralExpression, LogicalExpression, UnaryExpression, VariableExpression,
     },
     statement::{
         BlockStatement, ExpressionStatement, IfStatement, PrintStatement, Statement, VarStatement,
@@ -14,6 +14,8 @@ use crate::{
     token::{Token, TokenType},
     value::Value,
 };
+
+const MAX_FUNC_ARG_COUNT: usize = 255;
 
 pub struct Parser<I: Iterator<Item = Token>> {
     tokens: Peekable<I>,
@@ -154,6 +156,40 @@ impl<I: Iterator<Item = Token>> Parser<I> {
         Ok(primary)
     }
 
+    fn finish_call(&mut self, callee: Expression) -> Result<Expression> {
+        let mut args = vec![];
+        if !self.check(TokenType::ParenClose) {
+            loop {
+                if args.len() > MAX_FUNC_ARG_COUNT {
+                    return Self::error(self.peek(), "Can't have more that 255 arguments.");
+                }
+                args.push(self.handle_expression()?);
+                if self.match_next(&[TokenType::Comma]) {
+                    break;
+                }
+            }
+        }
+        let paren = self.consume_if(TokenType::ParenClose, "Expected ')' after call arguments.")?;
+        Ok(Expression::Call(Box::new(CallExpression {
+            callee,
+            args,
+            paren,
+        })))
+    }
+
+    fn handle_call(&mut self) -> Result<Expression> {
+        let mut expr = self.handle_postfix()?;
+        loop {
+            if self.match_next(&[TokenType::ParenOpen]) {
+                expr = self.finish_call(expr)?;
+            } else {
+                break;
+            }
+        }
+
+        Ok(expr)
+    }
+
     fn handle_unary(&mut self) -> Result<Expression> {
         if self.match_next(&[TokenType::Not, TokenType::Minus]) {
             let operator = self.previous();
@@ -163,7 +199,7 @@ impl<I: Iterator<Item = Token>> Parser<I> {
                 right,
             })));
         }
-        self.handle_postfix()
+        self.handle_call()
     }
 
     fn handle_factor(&mut self) -> Result<Expression> {

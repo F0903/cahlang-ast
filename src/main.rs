@@ -18,6 +18,8 @@ use std::{
     io::{stdin, stdout, BufRead, Read, Write},
 };
 
+use crate::value::{NativeFunc, Value};
+
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
 const DEBUG_TEST_FILE: &str = include_str!("../test.cah");
@@ -29,6 +31,11 @@ fn get_source_path() -> Option<String> {
 }
 
 fn run(source: String, interpreter: &mut Interpreter) -> Result<()> {
+    interpreter.register_native(NativeFunc::new("hello_world".to_owned(), 0, |_, _| {
+        println!("Hello world!");
+        Value::None
+    }));
+
     println!("{}\n", source);
     let lexer = Lexer::new(source);
     let tokens = lexer.lex()?;
