@@ -8,11 +8,11 @@ use crate::{
         UnaryExpression, VariableExpression,
     },
     statement::{
-        BlockStatement, ExpressionStatement, IfStatement, PrintStatement, Statement, VarStatement,
-        WhileStatement,
+        BlockStatement, ExpressionStatement, FunctionStatement, IfStatement, PrintStatement,
+        ReturnStatement, Statement, VarStatement, WhileStatement,
     },
     token::{Token, TokenType},
-    value::{NativeFunc, Value},
+    value::{Function, NativeFunction, Value},
 };
 
 pub struct Interpreter {
@@ -29,9 +29,13 @@ impl Interpreter {
         }
     }
 
-    pub fn register_native(&self, func: NativeFunc) {
+    pub fn register_native(&self, func: NativeFunction) {
         let mut env = self.env.borrow_mut();
         env.define(func.get_name().to_owned(), Value::Callable(Box::new(func)));
+    }
+
+    pub fn get_global_env(&self) -> Env {
+        self.globals.clone()
     }
 
     pub fn get_current_env(&self) -> Env {
@@ -335,7 +339,7 @@ impl Interpreter {
                 format!("Exptected {} arguments, but got {}", arg_needed, arg_num),
             );
         }
-        Ok(callable.call(&self, args))
+        callable.call(self, args)
     }
 
     fn evaluate(&mut self, expr: &Expression) -> Result<Value> {
@@ -373,7 +377,16 @@ impl Interpreter {
         Ok(())
     }
 
-    fn execute_block(&mut self, statements: &[Statement], env: Env) -> Result<()> {
+    fn execute_function_statement(&mut self, statement: &FunctionStatement) -> Result<()> {
+        let function = Function::new(statement.clone());
+        self.env.borrow_mut().define(
+            statement.name.lexeme.clone(),
+            Value::Callable(Box::new(function)),
+        );
+        Ok(())
+    }
+
+    pub fn execute_block(&mut self, statements: &[Statement], env: Env) -> Result<()> {
         let previous = self.env.clone();
         self.env = env;
         for statement in statements {
@@ -406,14 +419,21 @@ impl Interpreter {
         Ok(())
     }
 
+    fn execute_return_statement(&mut self, statement: &ReturnStatement) -> Result<()> {
+        //TODO
+        todo!()
+    }
+
     fn execute(&mut self, statement: &Statement) -> Result<()> {
         match statement {
             Statement::Print(x) => self.execute_print_statement(x),
             Statement::Expression(x) => self.execute_expression_statement(x),
             Statement::Var(x) => self.execute_var_statement(x),
+            Statement::Function(x) => self.execute_function_statement(x),
             Statement::Block(x) => self.execute_block_statement(x),
             Statement::If(x) => self.execute_if_statement(x),
             Statement::While(x) => self.execute_while_statement(x),
+            Statement::Return(x) => self.execute_return_statement(x),
         }
     }
 

@@ -33,7 +33,6 @@ pub struct Lexer {
     current: usize,
     line: usize,
     ignore_newline: bool,
-    ignore_next_newline: bool,
 }
 
 impl Lexer {
@@ -45,7 +44,6 @@ impl Lexer {
             current: 0,
             line: 0,
             ignore_newline: false,
-            ignore_next_newline: false,
         }
     }
 
@@ -164,6 +162,22 @@ impl Lexer {
         self.add_token(token_type);
     }
 
+    fn is_maybe_stmt_end(test_type: &TokenType) -> bool {
+        static STMT_END_TOKENS: &'static [TokenType] = &[
+            TokenType::BraceClose,
+            TokenType::ParenClose,
+            TokenType::SquareClose,
+            TokenType::True,
+            TokenType::False,
+            TokenType::Number,
+            TokenType::String,
+            TokenType::None,
+            TokenType::End,
+            TokenType::Identifier,
+        ];
+        STMT_END_TOKENS.iter().any(|x| x == test_type)
+    }
+
     fn lex_token(&mut self) {
         let next = self.next_char();
         match next {
@@ -181,11 +195,13 @@ impl Lexer {
                     if len == 0 {
                         return;
                     }
-                    if self.ignore_next_newline {
-                        self.ignore_next_newline = false;
-                        return;
+                    let last = match self.tokens.get(len - 1) {
+                        Some(x) => x,
+                        None => return,
+                    };
+                    if Self::is_maybe_stmt_end(&last.token_type) {
+                        self.add_token(TokenType::StatementEnd);
                     }
-                    self.add_token(TokenType::StatementEnd);
                 }
             }
             '(' => {
@@ -206,7 +222,6 @@ impl Lexer {
             }
             '{' => {
                 self.add_token(TokenType::BraceOpen);
-                self.ignore_next_newline = true
             }
             '}' => self.add_token(TokenType::BraceClose),
             ',' => self.add_token(TokenType::Comma),

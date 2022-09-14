@@ -2,10 +2,8 @@
 
 hello_world()
 
-offering a = 5
-a += 15
-a -= 2
-if a > 5 {
-    a--
-    $< a
+ritual test(x) {
+    $< "Got the following value: " + x
 }
+
+test(5)

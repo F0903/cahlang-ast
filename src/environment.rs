@@ -13,6 +13,12 @@ pub struct Environment {
     values: HashMap<String, Value>,
 }
 
+impl Into<Env> for Environment {
+    fn into(self) -> Env {
+        Rc::new(RefCell::new(self))
+    }
+}
+
 impl<'a> Environment {
     pub fn new(enclosing: Option<Env>) -> Self {
         Self {

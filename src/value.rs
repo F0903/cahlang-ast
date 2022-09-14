@@ -1,19 +1,23 @@
+use crate::{
+    environment::{Env, Environment},
+    error::Result,
+    interpreter::Interpreter,
+    statement::FunctionStatement,
+};
 use std::fmt::{Debug, Display};
 
-use crate::{environment::Env, interpreter::Interpreter};
-
 #[derive(Debug, Clone)]
-pub struct NativeFunc {
+pub struct NativeFunction {
     name: String,
     arg_count: usize,
-    func: fn(env: Env, args: Vec<Value>) -> Value,
+    func: fn(env: Env, args: Vec<Value>) -> Result<Value>,
 }
 
-impl NativeFunc {
+impl NativeFunction {
     pub fn new(
         name: impl ToString,
         arg_count: usize,
-        func: fn(env: Env, args: Vec<Value>) -> Value,
+        func: fn(env: Env, args: Vec<Value>) -> Result<Value>,
     ) -> Self {
         Self {
             name: name.to_string(),
@@ -27,14 +31,46 @@ impl NativeFunc {
     }
 }
 
-impl CallableClone for NativeFunc {
+#[derive(Debug, Clone)]
+pub struct Function {
+    declaration: FunctionStatement,
+}
+
+impl Function {
+    pub fn new(declaration: FunctionStatement) -> Self {
+        Self { declaration }
+    }
+}
+
+impl CallableClone for Function {
     fn clone_box(&self) -> Box<dyn Callable> {
         Box::new(self.clone())
     }
 }
 
-impl Callable for NativeFunc {
-    fn call(&self, interpreter: &Interpreter, args: Vec<Value>) -> Value {
+impl Callable for Function {
+    fn call(&self, interpreter: &mut Interpreter, args: Vec<Value>) -> Result<Value> {
+        let mut local_env = Environment::new(Some(interpreter.get_global_env()));
+        for (param, arg) in self.declaration.params.iter().zip(args.iter()) {
+            local_env.define(param.lexeme.clone(), arg.clone());
+        }
+        interpreter.execute_block(&self.declaration.body, local_env.into())?;
+        Ok(Value::None)
+    }
+
+    fn get_arity(&self) -> usize {
+        self.declaration.params.len()
+    }
+}
+
+impl CallableClone for NativeFunction {
+    fn clone_box(&self) -> Box<dyn Callable> {
+        Box::new(self.clone())
+    }
+}
+
+impl Callable for NativeFunction {
+    fn call(&self, interpreter: &mut Interpreter, args: Vec<Value>) -> Result<Value> {
         (self.func)(interpreter.get_current_env(), args)
     }
 
@@ -48,7 +84,7 @@ pub trait CallableClone {
 }
 
 pub trait Callable: CallableClone + Debug {
-    fn call(&self, interpreter: &Interpreter, args: Vec<Value>) -> Value;
+    fn call(&self, interpreter: &mut Interpreter, args: Vec<Value>) -> Result<Value>;
     fn get_arity(&self) -> usize;
 }
 

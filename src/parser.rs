@@ -1,5 +1,5 @@
 use core::panic;
-use std::iter::Peekable;
+use std::{fmt::Display, iter::Peekable};
 
 use crate::{
     error::{get_err_handler, Result, RuntimeError},
@@ -8,14 +8,29 @@ use crate::{
         LiteralExpression, LogicalExpression, UnaryExpression, VariableExpression,
     },
     statement::{
-        BlockStatement, ExpressionStatement, IfStatement, PrintStatement, Statement, VarStatement,
-        WhileStatement,
+        BlockStatement, ExpressionStatement, FunctionStatement, IfStatement, PrintStatement,
+        ReturnStatement, Statement, VarStatement, WhileStatement,
     },
     token::{Token, TokenType},
     value::Value,
 };
 
 const MAX_FUNC_ARG_COUNT: usize = 255;
+
+enum FunctionKind {
+    Function,
+    Method,
+}
+
+impl Display for FunctionKind {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let text = match self {
+            Self::Function => "Function",
+            Self::Method => "Method",
+        };
+        f.write_str(text)
+    }
+}
 
 pub struct Parser<I: Iterator<Item = Token>> {
     tokens: Peekable<I>,
@@ -164,7 +179,7 @@ impl<I: Iterator<Item = Token>> Parser<I> {
                     return Self::error(self.peek(), "Can't have more that 255 arguments.");
                 }
                 args.push(self.handle_expression()?);
-                if self.match_next(&[TokenType::Comma]) {
+                if !self.match_next(&[TokenType::Comma]) {
                     break;
                 }
             }
@@ -402,6 +417,22 @@ impl<I: Iterator<Item = Token>> Parser<I> {
         Ok(Statement::While(WhileStatement { condition, body }))
     }
 
+    fn handle_return_statement(&mut self) -> Result<Statement> {
+        let keyword = self.previous();
+        let expr = if !self.check(TokenType::BraceClose) {
+            Some(self.handle_expression()?)
+        } else {
+            None
+        };
+        if !self.check(TokenType::BraceClose) {
+            return Self::error(
+                &keyword,
+                "Return must be the last statement in a block. (preceeding '}')",
+            );
+        }
+        Ok(Statement::Return(ReturnStatement { expr, keyword }))
+    }
+
     fn handle_statement(&mut self) -> Result<Statement> {
         if self.match_next(&[TokenType::DollarLess]) {
             self.handle_print_statement()
@@ -411,6 +442,8 @@ impl<I: Iterator<Item = Token>> Parser<I> {
             self.handle_if_statement()
         } else if self.match_next(&[TokenType::While]) {
             self.handle_while_statement()
+        } else if self.match_next(&[TokenType::Return]) {
+            self.handle_return_statement()
         } else {
             self.handle_expression_statement()
         }
@@ -429,10 +462,49 @@ impl<I: Iterator<Item = Token>> Parser<I> {
         Ok(Statement::Var(VarStatement { name, initializer }))
     }
 
+    fn handle_function_declaration(&mut self, kind: FunctionKind) -> Result<Statement> {
+        let name = self.consume_if(TokenType::Identifier, &format!("Expected {} name", kind))?;
+        self.consume_if(
+            TokenType::ParenOpen,
+            &format!("Expected '(' after {} name.", kind),
+        )?;
+        let mut params = vec![];
+        if !self.check(TokenType::ParenClose) {
+            loop {
+                if params.len() >= MAX_FUNC_ARG_COUNT {
+                    return Self::error(
+                        self.peek(),
+                        &format!("Can't have more than {} parameters.", MAX_FUNC_ARG_COUNT),
+                    );
+                }
+                params.push(self.consume_if(TokenType::Identifier, "Expected paramter name.")?);
+                if !self.match_next(&[TokenType::Comma]) {
+                    break;
+                }
+            }
+        }
+        self.consume_if(TokenType::ParenClose, "Expected ')' after parameters.")?;
+        self.consume_if(
+            TokenType::BraceOpen,
+            &format!("Expected '{{' before {} body.", kind),
+        )?;
+        let body = self.parse_block()?;
+        Ok(Statement::Function(FunctionStatement {
+            body,
+            name,
+            params,
+        }))
+    }
+
     fn handle_declaration(&mut self) -> Result<Statement> {
         let had_err;
         if self.match_next(&[TokenType::Offering]) {
             match self.handle_var_declaration() {
+                Ok(x) => return Ok(x),
+                Err(_) => had_err = true,
+            }
+        } else if self.match_next(&[TokenType::Ritual]) {
+            match self.handle_function_declaration(FunctionKind::Function) {
                 Ok(x) => return Ok(x),
                 Err(_) => had_err = true,
             }

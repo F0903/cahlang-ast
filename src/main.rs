@@ -18,7 +18,7 @@ use std::{
     io::{stdin, stdout, BufRead, Read, Write},
 };
 
-use crate::value::{NativeFunc, Value};
+use crate::value::{NativeFunction, Value};
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
@@ -31,9 +31,9 @@ fn get_source_path() -> Option<String> {
 }
 
 fn run(source: String, interpreter: &mut Interpreter) -> Result<()> {
-    interpreter.register_native(NativeFunc::new("hello_world".to_owned(), 0, |_, _| {
+    interpreter.register_native(NativeFunction::new("hello_world".to_owned(), 0, |_, _| {
         println!("Hello world!");
-        Value::None
+        Ok(Value::None)
     }));
 
     println!("{}\n", source);
