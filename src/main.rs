@@ -18,10 +18,7 @@ use std::{
     io::{stdin, stdout, BufRead, Read, Write},
 };
 
-use crate::{
-    token::Token,
-    value::{NativeFunction, Value},
-};
+use crate::value::{NativeFunction, Value};
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 

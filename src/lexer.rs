@@ -1,4 +1,4 @@
-use super::{token::Token, Result};
+use super::token::Token;
 use crate::{create_string_map, error::get_err_handler, token::TokenType, value::Value};
 use once_cell::sync::Lazy;
 use std::collections::HashMap;
