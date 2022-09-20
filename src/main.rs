@@ -18,7 +18,10 @@ use std::{
     io::{stdin, stdout, BufRead, Read, Write},
 };
 
-use crate::value::{NativeFunction, Value};
+use crate::{
+    token::Token,
+    value::{NativeFunction, Value},
+};
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
@@ -38,11 +41,7 @@ fn run(source: String, interpreter: &mut Interpreter) -> Result<()> {
 
     println!("{}\n", source);
     let lexer = Lexer::new(source);
-    let tokens = lexer.lex()?;
-
-    println!("{:?}", tokens);
-
-    let mut parser = Parser::new(tokens.into_iter());
+    let mut parser = Parser::new(lexer);
     let statements = parser.parse();
     interpreter.interpret(statements);
     Ok(())

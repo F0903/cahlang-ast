@@ -28,22 +28,22 @@ static KEYWORDS: Lazy<HashMap<String, TokenType>> = Lazy::new(|| {
 
 pub struct Lexer {
     source: String,
-    tokens: Vec<Token>,
     start: usize,
     current: usize,
     line: usize,
     ignore_newline: bool,
+    last_token: Option<Token>,
 }
 
 impl Lexer {
     pub fn new(source: String) -> Self {
         Lexer {
             source,
-            tokens: vec![],
             start: 0,
             current: 0,
             line: 0,
             ignore_newline: false,
+            last_token: None,
         }
     }
 
@@ -77,16 +77,16 @@ impl Lexer {
         ch
     }
 
-    fn add_token(&mut self, token_type: TokenType) {
+    fn make_token(&mut self, token_type: TokenType) -> Token {
         let text = self.source[self.start..self.current].to_owned();
         let token = Token::new(token_type, text, Value::None, self.line);
-        self.tokens.push(token);
+        token
     }
 
-    fn add_token_literal(&mut self, token_type: TokenType, literal: Value) {
+    fn make_token_literal(&mut self, token_type: TokenType, literal: Value) -> Token {
         let text = self.source[self.start..self.current].to_owned();
         let token = Token::new(token_type, text, literal, self.line);
-        self.tokens.push(token);
+        token
     }
 
     fn matches_next(&mut self, ch: char) -> bool {
@@ -105,7 +105,7 @@ impl Lexer {
         ch == '_' || ch.is_ascii_alphanumeric()
     }
 
-    fn handle_string(&mut self) {
+    fn handle_string(&mut self) -> Option<Token> {
         while self.peek() != '"' && !self.at_end() {
             if self.peek() == '\n' {
                 self.line += 1;
@@ -115,17 +115,17 @@ impl Lexer {
 
         if self.at_end() {
             get_err_handler().report(self.line, "Unterminated string.");
-            return;
+            return None;
         }
 
         // Closing "
         self.next_char();
 
         let literal = self.source[self.start + 1..self.current - 1].to_owned();
-        self.add_token_literal(TokenType::String, Value::String(literal));
+        Some(self.make_token_literal(TokenType::String, Value::String(literal)))
     }
 
-    fn handle_number(&mut self) {
+    fn handle_number(&mut self) -> Option<Token> {
         while self.peek().is_ascii_digit() {
             self.next_char();
         }
@@ -142,13 +142,13 @@ impl Lexer {
             Ok(x) => x,
             Err(_) => {
                 get_err_handler().report(self.line, "Could not parse number!");
-                return;
+                return None;
             }
         };
-        self.add_token_literal(TokenType::Number, Value::Number(value));
+        Some(self.make_token_literal(TokenType::Number, Value::Number(value)))
     }
 
-    fn handle_identifier(&mut self) {
+    fn handle_identifier(&mut self) -> Token {
         while Self::alphanumeric_or_underscore(self.peek()) {
             self.next_char();
         }
@@ -159,7 +159,7 @@ impl Lexer {
             None => TokenType::Identifier,
         };
 
-        self.add_token(token_type);
+        self.make_token(token_type)
     }
 
     fn is_maybe_stmt_end(test_type: &TokenType) -> bool {
@@ -178,7 +178,8 @@ impl Lexer {
         STMT_END_TOKENS.iter().any(|x| x == test_type)
     }
 
-    fn lex_token(&mut self) {
+    fn lex_token(&mut self) -> Token {
+        self.start = self.current;
         let next = self.next_char();
         match next {
             '?' => {
@@ -186,120 +187,136 @@ impl Lexer {
                 while self.peek() != '\n' && !self.at_end() {
                     self.next_char();
                 }
+                self.lex_token()
             }
-            ' ' | '\r' | '\t' => (),
+            ' ' | '\r' | '\t' => self.lex_token(),
             '\n' => {
                 self.line += 1;
                 if !self.ignore_newline {
-                    let len = self.tokens.len();
-                    if len == 0 {
-                        return;
-                    }
-                    let last = match self.tokens.get(len - 1) {
+                    let last = match &self.last_token {
                         Some(x) => x,
-                        None => return,
+                        None => return self.lex_token(),
                     };
-                    if Self::is_maybe_stmt_end(&last.token_type) {
-                        self.add_token(TokenType::StatementEnd);
+                    if !Self::is_maybe_stmt_end(&last.token_type) {
+                        return self.lex_token();
                     }
+                    return self.make_token(TokenType::StatementEnd);
                 }
+                self.lex_token()
             }
             '(' => {
-                self.add_token(TokenType::ParenOpen);
                 self.ignore_newline = true;
+                self.make_token(TokenType::ParenOpen)
             }
             ')' => {
-                self.add_token(TokenType::ParenClose);
                 self.ignore_newline = false;
+                self.make_token(TokenType::ParenClose)
             }
             '[' => {
-                self.add_token(TokenType::SquareOpen);
                 self.ignore_newline = true;
+                self.make_token(TokenType::SquareOpen)
             }
             ']' => {
-                self.add_token(TokenType::SquareClose);
                 self.ignore_newline = false;
+                self.make_token(TokenType::SquareClose)
             }
-            '{' => {
-                self.add_token(TokenType::BraceOpen);
-            }
-            '}' => self.add_token(TokenType::BraceClose),
-            ',' => self.add_token(TokenType::Comma),
-            '.' => self.add_token(TokenType::Dot),
+            '{' => self.make_token(TokenType::BraceOpen),
+            '}' => self.make_token(TokenType::BraceClose),
+            ',' => self.make_token(TokenType::Comma),
+            '.' => self.make_token(TokenType::Dot),
             '-' => {
                 if self.matches_next('-') {
-                    self.add_token(TokenType::MinusMinus)
+                    self.make_token(TokenType::MinusMinus)
                 } else if self.matches_next('=') {
-                    self.add_token(TokenType::MinusEqual)
+                    self.make_token(TokenType::MinusEqual)
                 } else {
-                    self.add_token(TokenType::Minus)
+                    self.make_token(TokenType::Minus)
                 }
             }
             '+' => {
                 if self.matches_next('+') {
-                    self.add_token(TokenType::PlusPlus)
+                    self.make_token(TokenType::PlusPlus)
                 } else if self.matches_next('=') {
-                    self.add_token(TokenType::PlusEqual)
+                    self.make_token(TokenType::PlusEqual)
                 } else {
-                    self.add_token(TokenType::Plus)
+                    self.make_token(TokenType::Plus)
                 }
             }
-            '*' => self.add_token(TokenType::Multiply),
-            '/' => self.add_token(TokenType::Divide),
-            '=' => self.add_token(TokenType::Equal),
+            '*' => self.make_token(TokenType::Multiply),
+            '/' => self.make_token(TokenType::Divide),
+            '=' => self.make_token(TokenType::Equal),
             '$' => {
                 let token = if self.matches_next('>') {
                     TokenType::DollarGreater
                 } else if self.matches_next('<') {
                     TokenType::DollarLess
                 } else {
-                    return;
+                    return self.lex_token();
                 };
-                self.add_token(token);
+                self.make_token(token)
             }
             '<' => {
                 let token = match self.matches_next('=') {
                     true => TokenType::LessEqual,
                     false => TokenType::Less,
                 };
-                self.add_token(token);
+                self.make_token(token)
             }
             '>' => {
                 let token = match self.matches_next('=') {
                     true => TokenType::GreaterEqual,
                     false => TokenType::Greater,
                 };
-                self.add_token(token);
+                self.make_token(token)
             }
-            '"' => self.handle_string(),
+            '"' => match self.handle_string() {
+                Some(x) => x,
+                None => self.lex_token(),
+            },
             _ => {
                 if next.is_ascii_digit() {
-                    self.handle_number();
+                    match self.handle_number() {
+                        Some(x) => return x,
+                        None => return self.lex_token(),
+                    }
                 } else if next.is_ascii_alphanumeric() {
-                    self.handle_identifier();
+                    return self.handle_identifier();
                 }
+                self.lex_token()
             }
         }
     }
 
     //TODO: Convert to iterator
-    pub fn lex(mut self) -> Result<Vec<Token>> {
-        while !self.at_end() {
-            self.start = self.current;
-            self.lex_token();
+    pub fn lex(&mut self) -> Token {
+        if self.at_end() {
+            if let Some(x) = &self.last_token {
+                let eof = Token::new(TokenType::EOF, "EOF".to_owned(), Value::None, self.line);
+                if let TokenType::EOF = x.token_type {
+                    return eof;
+                }
+                self.last_token = Some(eof);
+                return Token::new(
+                    TokenType::StatementEnd,
+                    "\n".to_owned(),
+                    Value::None,
+                    self.line,
+                );
+            }
         }
-        self.tokens.push(Token::new(
-            TokenType::StatementEnd,
-            "StatementEnd".to_owned(),
-            Value::None,
-            self.line,
-        ));
-        self.tokens.push(Token::new(
-            TokenType::EOF,
-            "EOF".to_owned(),
-            Value::None,
-            self.line,
-        ));
-        Ok(self.tokens)
+
+        let token = self.lex_token();
+        self.last_token = Some(token.clone());
+        token
+    }
+}
+
+impl Iterator for Lexer {
+    type Item = Token;
+
+    /// Will always return Some, so check the returned token for EOF.
+    fn next(&mut self) -> Option<Self::Item> {
+        let token = self.lex();
+        Some(token)
     }
 }
